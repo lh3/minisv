@@ -5,7 +5,7 @@ curl -L https://zenodo.org/records/8245120/files/k8-1.0.tar.bz2?download=1 | tar
 cp k8-1.0/k8-`uname -m`-`uname -s` k8
 
 # extract candidate SVs
-k8 minisv.js ej -c "k8 minisv.js" -n COLO829T test/COLO829T.hs38l.paf.gz \
+k8 minisv.js e -c "k8 minisv.js" -n COLO829T test/COLO829T.hs38l.paf.gz \
   test/COLO829T.chm13g.paf.gz | bash > COLO829T.rsv
 k8 minisv.js extract -n COLO829BL test/COLO829BL.hs38l.paf.gz > COLO829BL.rsv
 

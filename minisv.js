@@ -1,6 +1,6 @@
 #!/usr/bin/env k8
 
-const gc_version = "r133";
+const gc_version = "r6";
 
 /**************
  * From k8.js *
@@ -1188,17 +1188,17 @@ function gc_cmd_eval(args) {
 	}
 }
 
-/**********************
- * Join two GSV files *
- **********************/
+/********************************
+ * Intersect multiple RSV files *
+ ********************************/
 
-function gc_cmd_join(args) {
+function gc_cmd_isec(args) {
 	let opt = { win_size:1000 };
 	for (const o of getopt(args, "w:")) {
 		if (o.opt === "-w") opt.win_size = parseNum(o.arg);
 	}
-	if (args.length < 2) {
-		print("Usgae: minisv.js join [options] <filter.gsv> <out.gsv>");
+	if (args.length == 0) {
+		print("Usgae: minisv.js isec [options] <base.rsv> <alt.rsv> [...]");
 		print("Options:");
 		print(`  -w NUM     fuzzy window size [${opt.win_size}]`);
 		return;
@@ -1225,30 +1225,40 @@ function gc_cmd_join(args) {
 		return { type:type, len:len, st:qoff_l, en:qoff_r, flag:flag };
 	}
 
-	let h = {}
+	let g = [];
+	for (let i = 1; i < args.length; ++i) {
+		let h = {};
+		for (const line of k8_readline(args[i])) {
+			let t = line.split("\t");
+			const col_info = /^[><]+$/.test(t[2])? 8 : 6;
+			const name = t[col_info - 3];
+			if (h[name] == null) h[name] = [];
+			h[name].push(get_type(t, col_info));
+		}
+		g.push(h);
+	}
 	for (const line of k8_readline(args[0])) {
 		let t = line.split("\t");
 		const col_info = /^[><]+$/.test(t[2])? 8 : 6;
 		const name = t[col_info - 3];
-		if (h[name] == null) h[name] = [];
-		h[name].push(get_type(t, col_info));
-	}
-	for (const line of k8_readline(args[1])) {
-		let t = line.split("\t");
-		const col_info = /^[><]+$/.test(t[2])? 8 : 6;
-		const name = t[col_info - 3];
-		if (h[name] == null) continue;
-		const a = h[name];
-		const x = get_type(t, col_info);
-		let found = false;
-		for (let i = 0; i < a.length; ++i) {
-			if (x.st - opt.win_size < a[i].en && a[i].st < x.en + opt.win_size) { // overlap
-				if (x.flag === 0 || (x.flag & a[i].flag) || (a[i].flag & 8)) {
-					found = true;
+		let n_found = 0;
+		for (let i = 0; i < g.length; ++i) {
+			const h = g[i];
+			if (h[name] == null) break;
+			const a = h[name];
+			const x = get_type(t, col_info);
+			let found = false;
+			for (let i = 0; i < a.length; ++i) {
+				if (x.st - opt.win_size < a[i].en && a[i].st < x.en + opt.win_size) { // overlap
+					if (x.flag === 0 || (x.flag & a[i].flag) || (a[i].flag & 8)) {
+						found = true;
+					}
 				}
 			}
+			if (!found) break;
+			++n_found;
 		}
-		if (found) print(line);
+		if (n_found == g.length) print(line);
 	}
 }
 
@@ -1353,7 +1363,7 @@ function gc_cmd_genvcf(args) {
 	}
 }
 
-function gc_cmd_ej(args) {
+function gc_cmd_e(args) {
 	let opt = { cmd:"minisv.js", name:"foo", bed:null, dsa:false };
 	for (const o of getopt(args, "c:n:b:0")) {
 		if (o.opt == "-c") opt.cmd = o.arg;
@@ -1362,7 +1372,7 @@ function gc_cmd_ej(args) {
 		else if (o.opt == "-0") opt.dsa = true;
 	}
 	if (args.length == 0) {
-		print("Usage: minisv.js ej [options] <base.paf> [...]");
+		print("Usage: minisv.js e [options] <base.paf> [...]");
 		print("Options:");
 		print(`  -n STR     sample name [${opt.name}]`);
 		print(`  -c STR     minisv.js command [${opt.cmd}]`);
@@ -1370,36 +1380,17 @@ function gc_cmd_ej(args) {
 		print(`  -0         the last alignment is against donor-specific assembly`);
 		return;
 	}
-	let a = [ opt.cmd ];
-	if (args.length == 1) {
-		a.push("extract", "-n", opt.name);
-		if (opt.bed != null)
-			a.push("-b", opt.bed);
-		a.push(args[0]);
-	} else {
-		let ecmd0 = null;
-		for (let i = 0; i < args.length; ++i) {
-			let b = [ opt.cmd, "extract" ];
-			if (i == 0) {
-				b.push("-n", opt.name);
-				if (opt.bed != null)
-					b.push("-b", opt.bed);
-			} else if (opt.dsa && i == args.length - 1) {
-				b.push("-Q0");
-			} else {
-				b.push("-Q5");
-			}
-			b.push(args[i]);
-			const ecmd = `<(${b.join(" ")})`;
-			if (i == 0) {
-				a.push("join");
-				ecmd0 = ecmd;
-			} else if (i == 1) {
-				a.push(ecmd, ecmd0);
-			} else {
-				a.push("|", opt.cmd, "join", ecmd, "-");
-			}
+	let a = [ opt.cmd, "isec" ];
+	for (let i = 0; i < args.length; ++i) {
+		let b = [ opt.cmd, "extract" ];
+		if (i == 0) {
+			b.push("-n", opt.name);
+			if (opt.bed != null) b.push("-b", opt.bed);
+		} else {
+			b.push(opt.dsa && i == args.length - 1? "-Q0" : "-Q5");
 		}
+		b.push(args[i]);
+		a.push(`<(${b.join(" ")})`);
 	}
 	print(a.join(" "));
 }
@@ -1413,9 +1404,9 @@ function main(args)
 	if (args.length == 0) {
 		print("Usage: minisv.js <command> [arguments]");
 		print("Commands:");
-		print("  ej           run extract and join together");
-		print("  extract      extract long INDELs and breakpoints from PAF/GAF");
-		print("  join         join two 'extract' outputs");
+		print("  e            run 'extract' and 'isec' together");
+		print("  extract      extract long INDELs and breakends from PAF/GAF");
+		print("  isec         intersect multiple 'extract' outputs");
 		print("  merge        merge extracted INDELs and breakpoints");
 		print("  mergeflt     filter merge output");
 		print("  genvcf       convert to VCF");
@@ -1428,12 +1419,12 @@ function main(args)
 
 	var cmd = args.shift();
 	if (cmd === "extract" || cmd === "getsv") gc_cmd_extract(args);
-	else if (cmd === "ej") gc_cmd_ej(args);
+	else if (cmd === "e") gc_cmd_e(args);
 	else if (cmd === "merge" || cmd === "mergesv") gc_cmd_merge(args);
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);
 	else if (cmd === "view" || cmd === "format") gc_cmd_view(args);
-	else if (cmd === "join") gc_cmd_join(args);
+	else if (cmd === "isec") gc_cmd_isec(args);
 	else if (cmd === "genvcf") gc_cmd_genvcf(args);
 	else if (cmd === "snfpair") gc_cmd_snfpair(args);
 	else if (cmd === "version") {
