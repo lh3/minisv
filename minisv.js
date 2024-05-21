@@ -1353,19 +1353,21 @@ function gc_cmd_genvcf(args) {
 	}
 }
 
-function gc_cmd_easyjoin(args) {
-	let opt = { cmd:"minisv.js", name:"foo", bed:null };
-	for (const o of getopt(args, "c:n:b:")) {
+function gc_cmd_ej(args) {
+	let opt = { cmd:"minisv.js", name:"foo", bed:null, dsa:false };
+	for (const o of getopt(args, "c:n:b:0")) {
 		if (o.opt == "-c") opt.cmd = o.arg;
 		else if (o.opt == "-n") opt.name = o.arg;
 		else if (o.opt == "-b") opt.bed = o.arg;
+		else if (o.opt == "-0") opt.dsa = true;
 	}
 	if (args.length == 0) {
-		print("Usage: minisv.js easyjoin [options] <base.paf> [...]");
+		print("Usage: minisv.js ej [options] <base.paf> [...]");
 		print("Options:");
 		print(`  -n STR     sample name [${opt.name}]`);
 		print(`  -c STR     minisv.js command [${opt.cmd}]`);
 		print(`  -b FILE    centromeric BED file []`);
+		print(`  -0         the last alignment is against donor-specific assembly`);
 		return;
 	}
 	let a = [ opt.cmd ];
@@ -1382,6 +1384,8 @@ function gc_cmd_easyjoin(args) {
 				b.push("-n", opt.name);
 				if (opt.bed != null)
 					b.push("-b", opt.bed);
+			} else if (opt.dsa && i == args.length - 1) {
+				b.push("-Q0");
 			} else {
 				b.push("-Q5");
 			}
@@ -1409,14 +1413,14 @@ function main(args)
 	if (args.length == 0) {
 		print("Usage: minisv.js <command> [arguments]");
 		print("Commands:");
-		print("  easyjoin     run extract and join together");
-		print("  extract      extract long INDELs and breakpoints from GAF");
+		print("  ej           run extract and join together");
+		print("  extract      extract long INDELs and breakpoints from PAF/GAF");
+		print("  join         join two 'extract' outputs");
 		print("  merge        merge extracted INDELs and breakpoints");
 		print("  mergeflt     filter merge output");
-		print("  eval         evaluate SV calls");
-		print("  view         print in the gafcall format");
-		print("  join         join two 'extract' outputs");
 		print("  genvcf       convert to VCF");
+		print("  view         print in the gafcall format");
+		print("  eval         evaluate SV calls");
 		print("  snfpair      get tumor-specific SVs from Sniffles2 paired output");
 		print("  version      print version number");
 		exit(1);
@@ -1424,7 +1428,7 @@ function main(args)
 
 	var cmd = args.shift();
 	if (cmd === "extract" || cmd === "getsv") gc_cmd_extract(args);
-	else if (cmd === "easyjoin") gc_cmd_easyjoin(args);
+	else if (cmd === "ej") gc_cmd_ej(args);
 	else if (cmd === "merge" || cmd === "mergesv") gc_cmd_merge(args);
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);

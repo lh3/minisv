@@ -4,23 +4,18 @@
 curl -L https://zenodo.org/records/8245120/files/k8-1.0.tar.bz2?download=1 | tar -jxf -
 cp k8-1.0/k8-`uname -m`-`uname -s` k8
 
-# alignment (requiring minigraph-0.21+ and minimap2-2.28+)
-minimap2 -cxmap-hifi -s50 -t16 --ds hg38.fa hifi.fq.gz > hs38l.paf
-minimap2 -cxmap-hifi -s50 -t16 --ds chm13v2.fa hifi.fq.gz > chm13l.paf
-minigraph -cxlr -t16 chm13-90c.r518.gfa.gz hifi.fq.gz > chm13g.paf
+# extract candidate SVs
+k8 minisv.js ej -c "k8 minisv.js" -n COLO829T test/COLO829T.hs38l.paf.gz \
+  test/COLO829T.chm13g.paf.gz | bash > COLO829T.rsv
+k8 minisv.js extract -n COLO829BL test/COLO829BL.hs38l.paf.gz > COLO829BL.rsv
 
-# extract candidate SVs (this may take >10 minutes on real data)
-k8 minisv.js easyjoin -c "k8 minisv.js" -n tumor hs38l.paf chm13l.paf chm13g.paf \
-  | bash > joined.msv
+# single-sample calling
+sort -k1,1 -k2,2n -S4G COLO829T.rsv | k8 minisv.js merge - > COLO829T.msv
+k8 minisv.js genvcf COLO829T.msv > COLO829T.vcf
 
-# generate SV calls
-sort -k1,1 -k2,2n -S4G joined.msv | k8 minisv.js merge - > call.msv
-k8 minisv.js genvcf call.msv > call.vcf
-
-# tumor-normal pairs
-k8 minisv.js extract -n normal normal.hs38l.paf > normal.msv
-cat joined.msv normal.msv | sort -k1,1 -k2,2n -S4G | k8 minisv.js merge - \
-  | grep tumor | grep -v normal > tumor.msv
+# paired calling
+sort -k1,1 -k2,2n -S4G COLO829{T,BL}.rsv | k8 minisv.js merge - \
+  | grep COLO829T | grep -v COLO829BL > COLO829T.paired.msv
 ```
 
 ## Introduction
@@ -41,3 +36,5 @@ For PacBio HiFi reads at high coverage, minisv achieves much higher specificity
 in mosaic SV calling, has comparable accuracy to tumor-normal paired SV callers,
 and is the only tool accurate enough for calling large-scale chromosomal
 alterations from a single tumor sample without matched normal.
+
+## Usage
