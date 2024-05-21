@@ -1,6 +1,6 @@
 #!/usr/bin/env k8
 
-const gc_version = "r6";
+const gc_version = "r8";
 
 /**************
  * From k8.js *
@@ -572,9 +572,9 @@ function gc_cmd_extract(args) {
 			y.ten = -1;
 			y.cg = t[5];
 			let m;
-			y.qst = (m = /^(\d+)[SH]/.exec(cg)) != null? parseInt(m[1]) : 0;
+			y.qst = (m = /^(\d+)[SH]/.exec(y.cg)) != null? parseInt(m[1]) : 0;
 			y.qlen = 0;
-			while ((m = re.exec(cg)) != null) {
+			while ((m = re.exec(y.cg)) != null) {
 				const op = m[2];
 				if (op == "S" || op == "H" || op == "M" || op == "=" || op == "I")
 					y.qlen += parseInt(m[1]);
@@ -582,7 +582,7 @@ function gc_cmd_extract(args) {
 			for (let i = 11; i < t.length; ++i)
 				if (t[i].substr(0, 5) === "ds:Z:")
 					y.ds = t[i].substr(5);
-			y.qen = y.qlen - ((m = /(\d+)[SH]$/.exec(cg)) != null? parseInt(m[1]) : 0);
+			y.qen = y.qlen - ((m = /(\d+)[SH]$/.exec(y.cg)) != null? parseInt(m[1]) : 0);
 		}
 		z.push(y);
 	}
@@ -1372,7 +1372,7 @@ function gc_cmd_e(args) {
 		else if (o.opt == "-0") opt.dsa = true;
 	}
 	if (args.length == 0) {
-		print("Usage: minisv.js e [options] <base.paf> [...]");
+		print("Usage: minisv.js e [options] <base.paf> [...] | bash > out.rsv");
 		print("Options:");
 		print(`  -n STR     sample name [${opt.name}]`);
 		print(`  -c STR     minisv.js command [${opt.cmd}]`);
@@ -1404,9 +1404,9 @@ function main(args)
 	if (args.length == 0) {
 		print("Usage: minisv.js <command> [arguments]");
 		print("Commands:");
-		print("  e            run 'extract' and 'isec' together");
-		print("  extract      extract long INDELs and breakends from PAF/GAF");
-		print("  isec         intersect multiple 'extract' outputs");
+		print(`  e            run "extract" and "isec" together`);
+		print(`  extract      extract long INDELs and breakends from PAF/GAF`);
+		print(`  isec         intersect multiple "extract" outputs`);
 		print("  merge        merge extracted INDELs and breakpoints");
 		print("  mergeflt     filter merge output");
 		print("  genvcf       convert to VCF");
