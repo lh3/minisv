@@ -188,7 +188,7 @@ function gc_cmd_extract(args) {
 	if (opt.min_mapq > opt.min_mapq_end)
 		opt.min_mapq = opt.min_mapq_end;
 	if (args.length == 0) {
-		print("Usage: gafcall.js extract [options] <stable.gaf>");
+		print("Usage: minisv.js extract [options] <stable.gaf>");
 		print("Options:");
 		print("  General:");
 		print(`    -n STR     sample name [${opt.name}]`);
@@ -608,7 +608,7 @@ function gc_cmd_merge(args) {
 		else if (o.opt === "-C") opt.max_check = parseInt(o.arg);
 	}
 	if (args.length == 0) {
-		print("Usage: sort -k1,1 -k2,2n extract.output | gafcall.js merge [options] -");
+		print("Usage: sort -k1,1 -k2,2n extract.output | minisv.js merge [options] -");
 		print("Options:");
 		print(`  -c INT     min read count [${opt.min_cnt}]`);
 		print(`  -s INT     min read count on each strand [${opt.min_cnt_strand}]`);
@@ -804,7 +804,7 @@ function gc_cmd_mergeflt(args) {
 		else if (o.opt === "-e") opt.min_cen_dist = parseNum(o.arg);
 	}
 	if (args.length === 0) {
-		print("Usage: gafcall.js mergeflt [options] <in.gsv>");
+		print("Usage: minisv.js mergeflt [options] <in.gsv>");
 		print("Options:");
 		print(`  -c INT     min read count [${opt.min_cnt}]`);
 		print(`  -s INT     min read count on each strand [${opt.min_cnt_strand}]`);
@@ -985,7 +985,7 @@ function gc_cmd_view(args) {
 		else if (o.opt === "-I") classify_inv = true;
 	}
 	if (args.length == 0) {
-		print("Usage: gafcall.js view [options] <in.vcf>");
+		print("Usage: minisv.js view [options] <in.vcf>");
 		print("Options:");
 		print(`  -l NUM       min length [${min_read_len}]`);
 		print(`  -c INT       min supporting read count [${min_count}]`);
@@ -1128,7 +1128,7 @@ function gc_cmd_eval(args) {
 		else if (o.opt === "-C") opt.search_best = true;
 	}
 	if (args.length < 2) {
-		print("Usgae: gafcall.js eval [options] <base.vcf> <test.vcf>");
+		print("Usgae: minisv.js eval [options] <base.vcf> <test.vcf>");
 		print("Options:");
 		print(`  -b FILE     confident regions in BED []`);
 		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
@@ -1198,7 +1198,7 @@ function gc_cmd_join(args) {
 		if (o.opt === "-w") opt.win_size = parseNum(o.arg);
 	}
 	if (args.length < 2) {
-		print("Usgae: gafcall.js join [options] <filter.gsv> <out.gsv>");
+		print("Usgae: minisv.js join [options] <filter.gsv> <out.gsv>");
 		print("Options:");
 		print(`  -w NUM     fuzzy window size [${opt.win_size}]`);
 		return;
@@ -1259,7 +1259,7 @@ function gc_cmd_snfpair(args) {
 		else if (o.opt === "-t") opt.tumor = parseInt(o.arg);
 	}
 	if (args.length == 0) {
-		print("Usage: gafcall.js snfpair [-n INT] [-t INT] <sniffles-multi.vcf>");
+		print("Usage: minisv.js snfpair [-n INT] [-t INT] <sniffles-multi.vcf>");
 		return;
 	}
 	for (const line of k8_readline(args[0])) {
@@ -1289,7 +1289,7 @@ function gc_cmd_genvcf(args) {
 	for (const o of getopt(args, "")) {
 	}
 	if (args.length == 0) {
-		print("Usage: gafcall.js genvcf [options] <in.gsv>");
+		print("Usage: minisv.js genvcf [options] <in.gsv>");
 		return;
 	}
 
@@ -1360,7 +1360,7 @@ function gc_cmd_genvcf(args) {
 function main(args)
 {
 	if (args.length == 0) {
-		print("Usage: gafcall.js <command> [arguments]");
+		print("Usage: minisv.js <command> [arguments]");
 		print("Commands:");
 		print("  extract      extract long INDELs and breakpoints from GAF");
 		print("  merge        merge extracted INDELs and breakpoints");
