@@ -28,6 +28,7 @@ sort -k1,1 -k2,2n -S4G COLO829{T,BL}.rsv | k8 minisv.js merge - \
   - [Somatic SVs in tumor-normal pairs](#call-pair)
   - [Large somatic SVs from a tumor-only sample](#call-tonly)
   - [Mosaic SVs](#call-mosaic)
+- [Comparing SVs](#compare)
 
 ## <a name="intro"></a>Introduction
 
@@ -53,8 +54,8 @@ alterations from a single tumor sample without matched normal.
 
 Minisv can call 1) germline SVs, 2) somatic SVs in tumor-normal pairs, 3) large
 somatic SVs in a single tumor, 4) mosaic SVs and 5) de novo SVs in a trio. The
-exact use also varies with the availability of de novo assembly of the sample.
-It achieves this variety of calling modes in three steps:
+exact use also depends on whether the de novo assembly of the sample is
+available. Minisv achieves this variety of calling modes in three steps:
 
 1. Extract SVs from read alignment with `extract`. This command processes one
    read at a time, extracts long INDELs or breakends and outputs in a BED-like
@@ -75,7 +76,10 @@ It achieves this variety of calling modes in three steps:
 ## <a name="call-sv"></a>Calling SVs
 
 Minisv seamlessly works with SAM, PAF or GAF (graph PAF) formats. It
-**requires** the `ds:Z` tag outputted by minigraph-0.21+ or minimap2-2.28+.
+**requires** the `ds:Z` tag outputted by [minigraph][mg]-0.21+ or
+[minimap2][mm2]-2.28+. For minigraph, use `-cxlr` for long reads. For minimap2,
+use `-cxmap-hifi -s50` for HiFi reads. The minimap2 option for Nanopore reads
+varies with the read error rate.
 
 ### <a name="call-germline"></a>Germline SVs
 
@@ -144,9 +148,14 @@ cat sv.hg38l+tgs.rsv | sort -k1,1 -k2,2 -S4g | minisv.js merge -c2 -s0 - > sv.hg
 Having the phased sample assembly is **critical** to the calling of small
 mosaic SVs. If you do not have the assembly, graph alignment is important for
 reducing alignment errors and filtering common germline SVs. However, because
-there are more small rare SVs than small rare mosaic SVs, only large mosaic
+there are more small rare SVs than small mosaic SVs, only large mosaic
 chromosomal alteration calls are reliable. If you have the assembly, graph
 alignment may still help specificity at the cost of sensitivity especially
-around VNTRs.
+around [VNTRs][vntr-wiki].
+
+## <a name="compare"></a>Comparing SVs
 
 [mg-zenodo]: https://zenodo.org/records/6286521
+[vntr-wiki]: https://en.wikipedia.org/wiki/Variable_number_tandem_repeat
+[mg]: https://github.com/lh3/minigraph
+[mm2]: https://github.com/lh3/minimap2
