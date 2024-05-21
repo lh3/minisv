@@ -1280,9 +1280,9 @@ function gc_cmd_snfpair(args) {
 	}
 }
 
-/*******************************
- * Convert to VCF (unfinished) *
- *******************************/
+/******************
+ * Convert to VCF *
+ ******************/
 
 function gc_cmd_genvcf(args) {
 	let opt = { };
@@ -1353,6 +1353,53 @@ function gc_cmd_genvcf(args) {
 	}
 }
 
+function gc_cmd_easyjoin(args) {
+	let opt = { cmd:"minisv.js", name:"foo", bed:null };
+	for (const o of getopt(args, "c:n:b:")) {
+		if (o.opt == "-c") opt.cmd = o.arg;
+		else if (o.opt == "-n") opt.name = o.arg;
+		else if (o.opt == "-b") opt.bed = o.arg;
+	}
+	if (args.length == 0) {
+		print("Usage: minisv.js easyjoin [options] <base.paf> [...]");
+		print("Options:");
+		print(`  -n STR     sample name [${opt.name}]`);
+		print(`  -c STR     minisv.js command [${opt.cmd}]`);
+		print(`  -b FILE    centromeric BED file []`);
+		return;
+	}
+	let a = [ opt.cmd ];
+	if (args.length == 1) {
+		a.push("extract", "-n", opt.name);
+		if (opt.bed != null)
+			a.push("-b", opt.bed);
+		a.push(args[0]);
+	} else {
+		let ecmd0 = null;
+		for (let i = 0; i < args.length; ++i) {
+			let b = [ opt.cmd, "extract" ];
+			if (i == 0) {
+				b.push("-n", opt.name);
+				if (opt.bed != null)
+					b.push("-b", opt.bed);
+			} else {
+				b.push("-Q5");
+			}
+			b.push(args[i]);
+			const ecmd = `<(${b.join(" ")})`;
+			if (i == 0) {
+				a.push("join");
+				ecmd0 = ecmd;
+			} else if (i == 1) {
+				a.push(ecmd, ecmd0);
+			} else {
+				a.push("|", opt.cmd, "join", ecmd, "-");
+			}
+		}
+	}
+	print(a.join(" "));
+}
+
 /*****************
  * Main function *
  *****************/
@@ -1362,6 +1409,7 @@ function main(args)
 	if (args.length == 0) {
 		print("Usage: minisv.js <command> [arguments]");
 		print("Commands:");
+		print("  easyjoin     run extract and join together");
 		print("  extract      extract long INDELs and breakpoints from GAF");
 		print("  merge        merge extracted INDELs and breakpoints");
 		print("  mergeflt     filter merge output");
@@ -1376,6 +1424,7 @@ function main(args)
 
 	var cmd = args.shift();
 	if (cmd === "extract" || cmd === "getsv") gc_cmd_extract(args);
+	else if (cmd === "easyjoin") gc_cmd_easyjoin(args);
 	else if (cmd === "merge" || cmd === "mergesv") gc_cmd_merge(args);
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);
