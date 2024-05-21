@@ -22,13 +22,14 @@ sort -k1,1 -k2,2n -S4G COLO829{T,BL}.rsv | k8 minisv.js merge - \
 
 - [Getting Started](#start)
 - [Introduction](#intro)
-- [Design](#design)
+- [Workflow](#design)
 - [Calling SVs](#call-sv)
   - [Germline SVs](#call-germline)
   - [Somatic SVs in tumor-normal pairs](#call-pair)
   - [Large somatic SVs in tumor-only samples](#call-tonly)
   - [Mosaic SVs](#call-mosaic)
 - [Comparing SVs](#compare)
+- [Limitations](#limit)
 
 ## <a name="intro"></a>Introduction
 
@@ -38,18 +39,20 @@ alignments against multiple reference genomes. Minisv retains an SV on a read
 only if the SV is observed on the read alignments against all references. This
 simple strategy reduces alignment errors and filters out germline SVs in the
 sample (when used with the assembly of input reads) or in the population (when
-used with pangenomes). Given PacBio HiFi reads at high coverage, minisv
+used with pangenomes).
+
+Given PacBio HiFi reads at high coverage, minisv
 achieves higher specificity for mosaic SV calling, has comparable accuracy to
 tumor-normal paired SV callers, and is the only tool accurate enough for
 calling large chromosomal alterations (CAs) from a single tumor sample without
 matched normal.
 
-## <a name="design"></a>Design
+## <a name="design"></a>Workflow
 
 Minisv can call 1) germline SVs, 2) somatic SVs in tumor-normal pairs, 3) large
-somatic SVs in a single tumor, 4) mosaic SVs and 5) de novo SVs in a trio. The
-exact use also depends on whether the de novo assembly of the sample is
-available. Minisv achieves this variety of calling modes in three steps:
+somatic SVs in a single tumor, 4) mosaic SVs and 5) de novo SVs in a trio; the
+exact use also depends on the input data types. Minisv achieves this variety of
+calling modes in three steps:
 
 1. Extract SVs from read alignment with `extract`. This command processes one
    read at a time, extracts long INDELs or breakends and outputs in a BED-like
@@ -60,7 +63,7 @@ available. Minisv achieves this variety of calling modes in three steps:
    You can skip this step if you use one reference genome only, but you would
    lose the key advantage of minisv. The first two steps are shared by all
    calling modes, though the input alignments may be different. You can combine
-   them together with the `e` command, which provides a more convenient but
+   the first two steps with the `e` command, which provides a more convenient but
    less flexible interface.
 
 3. Call SVs supported by multiple reads using `merge`. This command counts the
@@ -143,6 +146,49 @@ alignment may still help specificity but at the cost of sensitivity especially
 around [VNTRs][vntr-wiki].
 
 ## <a name="compare"></a>Comparing SVs
+
+The `eval` command of minisv compares two or multiple SV callsets. To compare
+two callsets:
+```sh
+minisv.js eval -b data/hs38.reg.bed -l 100 call1.vcf call2.msv
+```
+where `-l` specifies the minimum SV length and `-b` specifies confident regions.
+The command line outputs TP, FN and FP. Minisv considers two SVs, *S1* and
+*S2*, to be the same if both ends of *S1* are within 500 bp from ends of *S2*
+and the INDEL types of *S1* and *S2* are the same. Minisv compares all types of
+SVs, including translocations, that can be described by two ends. You can also
+specify the minimum read support and the minimum SV length on the command line.
+
+If more than two callsets are given on the command line, minisv generates an
+output like:
+```txt
+SN  980     0.6091  0.8580  0.6135  0.9104  0.8754  C1
+SN  0.0673  110     0.0762  0.1319  0.1119  0.0665  C2
+SN  0.8408  0.6727  958     0.6411  0.9216  0.8469  C3
+SN  0.1980  0.4000  0.2119  326     0.2313  0.2154  C4
+SN  0.7071  0.5818  0.7359  0.6074  536     0.7012  C5
+SN  0.8459  0.5636  0.8361  0.6442  0.8731  947     C6
+```
+where the diagonal gives the count of SVs and the number at row *R* and column
+*C* equals to the fraction of calls in *R* found in *C*. In this example,
+84.59% of calls in C6 were found in C1 and 87.54% of calls in C1 found in C6.
+Generally, higher fraction on a row is correlated with higher sensitivity;
+higher fraction on a column is correlated with higher specificity for the
+caller on the column.
+
+Minise seamlessly parses the VCF format and the minisv format. It has been
+tested with Severus, Sniffles2, cuteSV, SAVANA, SVision-Pro, nanomonsv, SvABA
+and GRIPSS.
+
+## <a name="limit"></a>Limitations
+
+1. Minisv simply counts supporting reads to call an SV. More complex
+   algorithms, such as phasing, VNTR reposition and machine learning, may
+   improve its accuracy.
+
+2. Minisv does not output genotypes. This makes it less useful for germline SV
+   calling. On the HG002 benchmark data, minisv is close to but not as good as
+   the best germline SV caller.
 
 [mg-zenodo]: https://zenodo.org/records/6286521
 [vntr-wiki]: https://en.wikipedia.org/wiki/Variable_number_tandem_repeat
