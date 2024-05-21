@@ -26,29 +26,23 @@ sort -k1,1 -k2,2n -S4G COLO829{T,BL}.rsv | k8 minisv.js merge - \
 - [Calling SVs](#call-sv)
   - [Germline SVs](#call-germline)
   - [Somatic SVs in tumor-normal pairs](#call-pair)
-  - [Large somatic SVs from a tumor-only sample](#call-tonly)
+  - [Large somatic SVs in tumor-only samples](#call-tonly)
   - [Mosaic SVs](#call-mosaic)
 - [Comparing SVs](#compare)
 
 ## <a name="intro"></a>Introduction
 
-Minisv is a lightweight structural variation (SV) caller for long genomic
-reads. It is primarily developed for calling mosaic SVs, somatic SVs in paired
-or unpaired tumor samples, or de novo SVs. While minisv can also call germline
-SVs, it does not output genotypes and is a little less accurate than the best
-germline SV callers.
-
-The key advantage of minisv is to combine read alignments against multiple
-references, including pangenome graphs and the assembly of input reads. Minisv
-calls a SV only if it can be observed in all alignment. This simple strategy
-reduces alignment errors and filters out germline SVs in the sample (when used
-with the assembly of input reads) or in the population (when used with
-pangenomes).
-
-For PacBio HiFi reads at high coverage, minisv achieves much higher specificity
-for mosaic SV calling, has comparable accuracy to tumor-normal paired SV
-callers, and is the only tool accurate enough for calling large chromosomal
-alterations from a single tumor sample without matched normal.
+Minisv is a lightweight mosaic/somatic structural variation (SV) caller for
+long genomic reads. Different from other SV callers, it prefers to combine read
+alignments against multiple reference genomes. Minisv retains an SV on a read
+only if the SV is observed on the read alignments against all references. This
+simple strategy reduces alignment errors and filters out germline SVs in the
+sample (when used with the assembly of input reads) or in the population (when
+used with pangenomes). Given PacBio HiFi reads at high coverage, minisv
+achieves higher specificity for mosaic SV calling, has comparable accuracy to
+tumor-normal paired SV callers, and is the only tool accurate enough for
+calling large chromosomal alterations (CAs) from a single tumor sample without
+matched normal.
 
 ## <a name="design"></a>Design
 
@@ -65,8 +59,9 @@ available. Minisv achieves this variety of calling modes in three steps:
 2. Intersect candidate SVs extracted from multiple alignment files with `isec`.
    You can skip this step if you use one reference genome only, but you would
    lose the key advantage of minisv. The first two steps are shared by all
-   calling modes. You can combine them together with the `e` command, which
-   provides a more convenient but less flexible interface.
+   calling modes, though the input alignments may be different. You can combine
+   them together with the `e` command, which provides a more convenient but
+   less flexible interface.
 
 3. Call SVs supported by multiple reads using `merge`. This command counts the
    number of supporting reads for each sample. You can filter out SVs supported
@@ -78,8 +73,8 @@ available. Minisv achieves this variety of calling modes in three steps:
 Minisv seamlessly works with SAM, PAF or GAF (graph PAF) formats. It
 **requires** the `ds:Z` tag outputted by [minigraph][mg]-0.21+ or
 [minimap2][mm2]-2.28+. For minigraph, use `-cxlr` for long reads. For minimap2,
-use `-cxmap-hifi -s50` for HiFi reads. The minimap2 option for Nanopore reads
-varies with the read error rate.
+use `-cxmap-hifi -s50 --ds` for HiFi reads. The minimap2 option for Nanopore
+reads varies with the read error rate.
 
 ### <a name="call-germline"></a>Germline SVs
 
@@ -88,10 +83,9 @@ minisv.js extract -b data/hs38.cen-mask.bed aln.hg38l.paf.gz > sv.hg38l.rsv
 cat sv.hg38l.rsv | sort -k1,1 -k2,2n -S4g | minisv.js merge - > sv.hg38l.msv
 minisv.js genvcf sv.hg38l.msv > sv.hg38l.vcf
 ```
-
 For calling germline SVs, you only need one linear reference genome. This is the
-simplest use case, but as is mentioned above, minisv is not optimized for
-germline SV calling.
+simplest use case. However, minisv does not infer genotypes. It is not the best
+tool for germline SV calling.
 
 ### <a name="call-pair"></a>Somatic SVs in tumor-normal pairs
 
@@ -106,19 +100,19 @@ The last command selects SVs only present in TUMOR but not in NORMAL.
 
 If you want to take the GRCh38 coordinate system, it is recommended to also
 align reads to T2T-CHM13 and the [CHM13 graph][mg-zenodo]. If you have PacBio
-HiFi reads for the normal, assemble the reads with hifiasm, align the tumor
-reads to the normal assembly and provide the alignment *as the last input*
-along with option `-0`.
+HiFi reads for the normal, assemble the normal reads with [hifiasm][hifiasm],
+align the tumor reads to the normal assembly and provide the alignment *as the
+last input* along with option `-0`.
 
-When you do not have the normal assembly, intersecting with the graph alignment
-greatly reduces alignment errors at a minor cost of sensitivity. The
-availability of the normal assembly is usually more effective than graph
-alignment. When you have the normal assembly and worry about sensitivity, you
-may drop the graph alignment.
+Graph alignment greatly reduces alignment errors when the normal assembly is
+not available. When you have the normal assembly, intersecting with graph
+alignment can be optional. While graph alignment still improves specificity, it
+may affect sensitivity a little - a classical sensitivity vs specificity
+problem.
 
 Calling *de novo* SVs will be similar.
 
-### <a name="call-tonly"></a>Large somatic SVs from a tumor-only sample
+### <a name="call-tonly"></a>Large somatic SVs in tumor-only samples
 
 ```sh
 minisv.js e -b data/hs38.cen-mask.bed tumor.hg38l.paf tumor.chm13l.paf \
@@ -126,17 +120,13 @@ minisv.js e -b data/hs38.cen-mask.bed tumor.hg38l.paf tumor.chm13l.paf \
 cat sv.hg38l+tg.rsv | sort -k1,1 -k2,2 -S4g | minisv.js merge - > sv.hg38l+tg.msv
 minisv.js view -IC sv.hg38l+tg.msv
 ```
-In this example, pangenome graph alignment is critical for reducing alignment
-errors and for filtering out common germline SVs. There may be several hundred
-SVs called with this procedure. Most of SVs below 10 kb are rare germline SVs.
-Most large chromosomal alterations, such as translocations, foldback inversions
-(tagged by `foldback` in the output) and SVs longer 100 kb, are very rare in
-germline and are thus likely tumor events.
-
-Note that other SV callers may call ~30 large chromosomal alterations from a
-normal sample. Minisv has a much lower background error rate. Calling large
-chromosomal alterations from a tumor-only sample is a unique advantage of
-minisv.
+In the lack of the normal assembly in this case, pangenome graph alignment is
+critical for reducing alignment errors and for filtering out common germline
+SVs. There may be several hundred SVs called with this procedure. Most of the
+called SVs below 10 kb are rare germline events, not somatic. Nevertheless,
+most large chromosomal alterations, such as translocations, foldback
+inversions (tagged by `foldback` in the output) and events longer 100 kb, are
+likely somatic becase such large alterations rarely occur to germline.
 
 ### <a name="call-mosaic"></a>Mosaic SVs
 
@@ -145,12 +135,11 @@ minisv.js e -0b data/hs38.cen-mask.bed aln.hg38l.paf aln.chm13l.paf \
   aln.chm13g.paf aln.self.paf | bash > sv.hg38l+tgs.rsv
 cat sv.hg38l+tgs.rsv | sort -k1,1 -k2,2 -S4g | minisv.js merge -c2 -s0 - > sv.hg38l+tgs.msv
 ```
-Having the phased sample assembly is **critical** to the calling of small
-mosaic SVs. If you do not have the assembly, graph alignment is important for
-reducing alignment errors and filtering common germline SVs. However, because
-there are more small rare SVs than small mosaic SVs, only large mosaic
+Having the phased sample assembly is critical to the calling of small mosaic
+SVs. If you do not have the assembly, please perform graph alignment. However,
+because there are more small rare SVs than small mosaic SVs, only large mosaic
 chromosomal alteration calls are reliable. If you have the assembly, graph
-alignment may still help specificity at the cost of sensitivity especially
+alignment may still help specificity but at the cost of sensitivity especially
 around [VNTRs][vntr-wiki].
 
 ## <a name="compare"></a>Comparing SVs
@@ -159,3 +148,4 @@ around [VNTRs][vntr-wiki].
 [vntr-wiki]: https://en.wikipedia.org/wiki/Variable_number_tandem_repeat
 [mg]: https://github.com/lh3/minigraph
 [mm2]: https://github.com/lh3/minimap2
+[hifiasm]: https://github.com/chhylp123/hifiasm
