@@ -10,22 +10,34 @@ minimap2 -cxmap-hifi -s50 -t16 --ds chm13v2.fa hifi.fq.gz > chm13l.paf
 minigraph -cxlr -t16 chm13-90c.r518.gfa.gz hifi.fq.gz > chm13g.paf
 
 # extract candidate SVs (this may take >10 minutes on real data)
-k8 minisv.js easyjoin -c "k8 minisv.js" -n tumor hs38l.paf chm13l.paf chm13g.paf | bash > join.msv
+k8 minisv.js easyjoin -c "k8 minisv.js" -n tumor hs38l.paf chm13l.paf chm13g.paf \
+  | bash > joined.msv
 
 # generate SV calls
-sort -k1,1 -k2,2n -S4G join.msv | k8 minisv.js merge - > call.msv
+sort -k1,1 -k2,2n -S4G joined.msv | k8 minisv.js merge - > call.msv
 k8 minisv.js genvcf call.msv > call.vcf
 
 # tumor-normal pairs
 k8 minisv.js extract -n normal normal.hs38l.paf > normal.msv
-cat join.msv normal.msv | sort -k1,1 -k2,2n -S4G | k8 minisv.js merge - \
+cat joined.msv normal.msv | sort -k1,1 -k2,2n -S4G | k8 minisv.js merge - \
   | grep tumor | grep -v normal > tumor.msv
 ```
 
 ## Introduction
 
 Minisv is a lightweight structural variation (SV) caller for long genomic
-reads. While minisv can call germline SVs, it is primarily optimized for calling 
-mosaic SVs, somatic SVs in paired or unpaired tumor samples, or de novo SVs.
-The basic idea behind minisv is to use the read aligned to different references
-to greatly reduce alignment errors.
+reads. It is primarily developed for calling mosaic SVs, somatic SVs in paired
+or unpaired tumor samples, or de novo SVs. While minisv can also call germline
+SVs, existing germline callers will generally do better.
+
+The key advantage of minisv is to combine read alignments against multiple
+references, including pangenome graphs and the assembly of input reads. Minisv
+calls a SV only if it can be observed in all alignment. This simple strategy
+reduces alignment errors and filters out germline SVs in the sample (when used
+with the assembly of input reads) or in the population (when used with
+pangenomes).
+
+For PacBio HiFi reads at high coverage, minisv achieves much higher specificity
+in mosaic SV calling, has comparable accuracy to tumor-normal paired SV callers,
+and is the only tool accurate enough for calling large-scale chromosomal
+alterations from a single tumor sample without matched normal.
