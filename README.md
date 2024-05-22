@@ -183,7 +183,9 @@ and GRIPSS.
 
 1. Minisv simply counts supporting reads to call an SV. More complex
    algorithms, such as phasing, VNTR reposition and machine learning, may
-   improve its accuracy.
+   improve its accuracy. On the other hand, matching the accuracy of other
+   callers with such a simple algorithm implies the potential of our
+   multi-reference approach.
 
 2. Minisv does not output genotypes. This makes it less useful for germline SV
    calling. On the HG002 benchmark data, minisv is close to but not as good as
