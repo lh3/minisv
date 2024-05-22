@@ -1,4 +1,4 @@
-## Centromere regions
+## Centromeric regions
 
 File `chm13v2.cen-mask.bed` gives the approximate locations of centromeric
 satellite repeats and acrocentric short arms in CHM13 v2.0. It was *manually*
