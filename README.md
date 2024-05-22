@@ -142,8 +142,7 @@ Having the phased sample assembly is critical to the calling of small mosaic
 SVs. If you do not have the assembly, please perform graph alignment. However,
 because there are more small rare SVs than small mosaic SVs, only large mosaic
 chromosomal alteration calls are reliable. If you have the assembly, graph
-alignment may still help specificity but at the cost of sensitivity especially
-around [VNTRs][vntr-wiki].
+alignment may still help specificity but may hurt sensitivity around [VNTRs][vntr-wiki].
 
 ## <a name="compare"></a>Comparing SVs
 
@@ -156,10 +155,10 @@ where `-l` specifies the minimum SV length and `-b` specifies confident regions.
 The command line outputs TP, FN and FP. Minisv considers two SVs, *S1* and
 *S2*, to be the same if both ends of *S1* are within 500 bp from ends of *S2*
 and the INDEL types of *S1* and *S2* are the same. Minisv compares all types of
-SVs, including translocations, that can be described by two ends. You can also
-specify the minimum read support and the minimum SV length on the command line.
+SVs that can be associated with two ends. You can also specify the minimum read
+support (`-c`) and the minimum SV length (`-l`)on the command line.
 
-If more than two callsets are given on the command line, minisv generates an
+If more than two callsets are given on the command line, minisv will generate an
 output like:
 ```txt
 SN  980     0.6091  0.8580  0.6135  0.9104  0.8754  C1
@@ -176,7 +175,7 @@ Generally, higher fraction on a row is correlated with higher sensitivity;
 higher fraction on a column is correlated with higher specificity for the
 caller on the column.
 
-Minise seamlessly parses the VCF format and the minisv format. It has been
+Minisv seamlessly parses the VCF format and the minisv format. It has been
 tested with Severus, Sniffles2, cuteSV, SAVANA, SVision-Pro, nanomonsv, SvABA
 and GRIPSS.
 
