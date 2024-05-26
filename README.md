@@ -1,8 +1,8 @@
 ## <a name="start"></a>Getting Started
 ```sh
-# Download k8 v1.0; better copy "k8" to a directory in PATH
-curl -L https://zenodo.org/records/8245120/files/k8-1.0.tar.bz2?download=1 | tar -jxf -
-cp k8-1.0/k8-`uname -m`-`uname -s` k8
+# Download k8 v1.1; better copy "k8" to a directory in PATH
+curl -L https://zenodo.org/records/11318225/files/k8-1.1.tar.bz2?download=1 | tar -jxf -
+cp k8-1.1/k8-`uname -m`-`uname -s` k8
 
 # extract candidate SVs
 k8 minisv.js e -c "k8 minisv.js" -n COLO829T test/COLO829T.hs38l.paf.gz \
