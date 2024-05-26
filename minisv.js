@@ -1,6 +1,8 @@
 #!/usr/bin/env k8
 
-const gc_version = "r8";
+"use strict";
+
+const gc_version = "r17";
 
 /**************
  * From k8.js *
@@ -419,7 +421,7 @@ function gc_cmd_extract(args) {
 		let r = [{}, {}];
 		if (/^[><]/.test(y.path)) { // a path
 			if (y.strand != '+') throw Error("reverse strand on path");
-			let x = 0, i = 0;
+			let x = 0, i = 0, m;
 			while ((m = re_path.exec(y.path)) != null) {
 				const st = parseInt(m[3]), en = parseInt(m[4]), len = en - st;
 				if (y.tst >= x && y.tst < x + len) {
