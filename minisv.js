@@ -2,7 +2,7 @@
 
 "use strict";
 
-const gc_version = "r17";
+const gc_version = "r19";
 
 /**************
  * From k8.js *
@@ -1038,6 +1038,32 @@ function gc_cmd_view(args) {
  * Evaluation *
  **************/
 
+function gc_cmp_same_sv1(win_size, min_len_ratio, b, t) {
+	// check type
+	if (b.svtype != t.svtype) { // type mismatch
+		if (!(b.svtype === "DUP" && t.svtype === "INS") && !(b.svtype === "INS" && t.svtype === "DUP") && b.svtype !== "BND" && t.svtype !== "BND") // special case for INS vs DUP
+			return false;
+	}
+	// check length
+	const len_check = (Math.abs(b.svlen) >= Math.abs(t.svlen) * min_len_ratio && Math.abs(t.svlen) >= Math.abs(b.svlen) * min_len_ratio);
+	if (b.svtype !== "BND" && t.svtype !== "BND" && !len_check) return false;
+	// check the coordinates of end points
+	let match1 = 0, match2 = 0;
+	if (t.ctg == b.ctg   && t.pos >= b.pos - win_size   && t.pos <= b.pos + win_size)   match1 |= 1;
+	if (t.ctg == b.ctg2  && t.pos >= b.pos2 - win_size  && t.pos <= b.pos2 + win_size)  match1 |= 2;
+	if (t.ctg2 == b.ctg  && t.pos2 >= b.pos - win_size  && t.pos2 <= b.pos + win_size)  match2 |= 1;
+	if (t.ctg2 == b.ctg2 && t.pos2 >= b.pos2 - win_size && t.pos2 <= b.pos2 + win_size) match2 |= 2;
+	if (b.svtype === "DUP" && t.svtype === "INS") {
+		return ((match1&1) != 0);
+	} else if (b.svtype === "INS" && t.svtype === "DUP") {
+		return ((match1&1) != 0);
+	} else if (b.svtype === "BND" || t.svtype === "BND") {
+		return (((match1&1) != 0 && (match2&2) != 0) || ((match1&2) != 0 && (match2&1) != 0));
+	} else {
+		return ((match1&1) != 0 && (match2&2) != 0);
+	}
+}
+
 function gc_cmp_sv(opt, base, test, label) {
 	let h = {};
 	for (let i = 0; i < base.length; ++i) {
@@ -1052,32 +1078,6 @@ function gc_cmp_sv(opt, base, test, label) {
 		iit_index(h[ctg]);
 	}
 
-	function same_sv1(opt, b, t) { // compare two SVs
-		// check type
-		if (b.svtype != t.svtype) { // type mismatch
-			if (!(b.svtype === "DUP" && t.svtype === "INS") && !(b.svtype === "INS" && t.svtype === "DUP") && b.svtype !== "BND" && t.svtype !== "BND") // special case for INS vs DUP
-				return false;
-		}
-		// check length
-		const len_check = (Math.abs(b.svlen) >= Math.abs(t.svlen) * opt.min_len_ratio && Math.abs(t.svlen) >= Math.abs(b.svlen) * opt.min_len_ratio);
-		if (b.svtype !== "BND" && t.svtype !== "BND" && !len_check) return false;
-		// check the coordinates of end points
-		let match1 = 0, match2 = 0;
-		if (t.ctg == b.ctg   && t.pos >= b.pos - opt.win_size   && t.pos <= b.pos + opt.win_size)   match1 |= 1;
-		if (t.ctg == b.ctg2  && t.pos >= b.pos2 - opt.win_size  && t.pos <= b.pos2 + opt.win_size)  match1 |= 2;
-		if (t.ctg2 == b.ctg  && t.pos2 >= b.pos - opt.win_size  && t.pos2 <= b.pos + opt.win_size)  match2 |= 1;
-		if (t.ctg2 == b.ctg2 && t.pos2 >= b.pos2 - opt.win_size && t.pos2 <= b.pos2 + opt.win_size) match2 |= 2;
-		if (b.svtype === "DUP" && t.svtype === "INS") {
-			return ((match1&1) != 0);
-		} else if (b.svtype === "INS" && t.svtype === "DUP") {
-			return ((match1&1) != 0);
-		} else if (b.svtype === "BND" || t.svtype === "BND") {
-			return (((match1&1) != 0 && (match2&2) != 0) || ((match1&2) != 0 && (match2&1) != 0));
-		} else {
-			return ((match1&1) != 0 && (match2&2) != 0);
-		}
-	}
-
 	function eval1(opt, h, ctg, pos, t) {
 		if (h[ctg] == null) return false;
 		const st = pos > opt.win_size? pos - opt.win_size : 0;
@@ -1085,7 +1085,7 @@ function gc_cmp_sv(opt, base, test, label) {
 		const a = iit_overlap(h[ctg], st, en);
 		let n = 0;
 		for (let i = 0; i < a.length; ++i)
-			if (same_sv1(opt, a[i].data, t))
+			if (gc_cmp_same_sv1(opt.win_size, opt.min_len_ratio, a[i].data, t))
 				++n;
 		return n;
 	}
@@ -1113,9 +1113,35 @@ function gc_cmp_sv(opt, base, test, label) {
 	return [tot, error];
 }
 
+function gc_eval_merge_sv(win_size, min_len_ratio, all) {
+	let vcf = [];
+	for (let i = 0; i < all.length; ++i)
+		for (let j = 0; j < all[i].length; ++j)
+			vcf.push(all[i][j]);
+	vcf.sort(function(a, b) { return a.ctg < b.ctg? -1 : a.ctg > b.ctg? 1 : a.pos - b.pos });
+	let out = [];
+	for (let i = 0; i < vcf.length; ++i) {
+		let merge_to = -1;
+		vcf[i].merge = 0;
+		for (let j = out.length - 1; j >= 0 && out[j].ctg == vcf[i].ctg && vcf[i].pos - out[j].pos <= win_size; --j) {
+			if (gc_cmp_same_sv1(win_size, min_len_ratio, out[j], vcf[i])) {
+				merge_to = j;
+				break;
+			}
+		}
+		if (merge_to < 0) {
+			merge_to = out.length;
+			out.push(vcf[i]);
+		}
+		out[merge_to].merge++;
+	}
+	return out;
+}
+
 function gc_cmd_eval(args) {
-	let opt = { min_len:100, read_len_ratio:0.8, win_size:500, min_len_ratio:0.6, min_vaf:0, min_count:0, bed:null, dbg:false, print_err:false, ignore_flt:false, check_gt:false, search_best:false };
-	for (const o of getopt(args, "dr:l:w:em:v:b:c:FGC")) {
+	let opt = { min_len:100, read_len_ratio:0.8, win_size:500, min_len_ratio:0.6, min_vaf:0, min_count:0, bed:null,
+				dbg:false, print_err:false, ignore_flt:false, check_gt:false, search_best:false, merge:false };
+	for (const o of getopt(args, "dr:l:w:em:v:b:c:FGCM")) {
 		if (o.opt === "-d") opt.dbg = true;
 		else if (o.opt === "-b") opt.bed = gc_read_bed(o.arg);
 		else if (o.opt === "-l") opt.min_len = parseNum(o.arg);
@@ -1128,6 +1154,7 @@ function gc_cmd_eval(args) {
 		else if (o.opt === "-G") opt.check_gt = true;
 		else if (o.opt === "-e") opt.print_err = true;
 		else if (o.opt === "-C") opt.search_best = true;
+		else if (o.opt === "-M") opt.merge = true;
 	}
 	if (args.length < 2) {
 		print("Usgae: minisv.js eval [options] <base.vcf> <test.vcf>");
@@ -1139,6 +1166,7 @@ function gc_cmd_eval(args) {
 		print(`  -r FLOAT    read SVs longer than {-l}*FLOAT [${opt.read_len_ratio}]`);
 		print(`  -m FLOAT    two SVs regarded the same if length ratio above [${opt.min_len_ratio}]`);
 		//print(`  -v FLOAT    ignore VAF below FLOAT (requiring VAF in VCF) [${opt.min_vaf}]`);
+		print(`  -M          if multi-sample provided, merge others and evaluate`);
 		print(`  -F          ignore FILTER in VCF`);
 		print(`  -G          check GT in VCF`);
 		print(`  -C          search for the best count threshold`);
@@ -1178,14 +1206,31 @@ function gc_cmd_eval(args) {
 		let vcf = [];
 		for (let i = 0; i < args.length; ++i)
 			vcf[i] = gc_parse_sv(args[i], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
-		for (let i = 0; i < args.length; ++i) {
-			let a = [ "SN" ];
-			for (let j = 0; j < args.length; ++j) {
-				const [cnt, err] = gc_cmp_sv(opt, vcf[i], vcf[j], "XX");
-				if (i != j) a.push((1 - err/cnt).toFixed(4));
-				else a.push(cnt);
+		if (opt.merge) {
+			for (let i = 0; i < args.length; ++i) {
+				let other = [];
+				for (let j = 0; j < args.length; ++j)
+					if (i != j) other.push(vcf[j]);
+				let merge = gc_eval_merge_sv(opt.win_size, opt.min_len_ratio, other);
+				const [tot_fp, fp] = gc_cmp_sv(opt, merge, vcf[i]);
+				let merge2 = [];
+				for (let k = 0; k < merge.length; ++k)
+					if (merge[k].merge >= 2)
+						merge2.push(merge[k]);
+				const [tot_fn, fn] = gc_cmp_sv(opt, vcf[i], merge2);
+				print("RN", tot_fn, fn, (fn / tot_fn).toFixed(4), args[i]);
+				print("RP", tot_fp, fp, (fp / tot_fp).toFixed(4), args[i]);
 			}
-			print(a.join("\t"), args[i]);
+		} else {
+			for (let i = 0; i < args.length; ++i) {
+				let a = [ "SN" ];
+				for (let j = 0; j < args.length; ++j) {
+					const [cnt, err] = gc_cmp_sv(opt, vcf[i], vcf[j], "XX");
+					if (i != j) a.push((1 - err/cnt).toFixed(4));
+					else a.push(cnt);
+				}
+				print(a.join("\t"), args[i]);
+			}
 		}
 	}
 }
