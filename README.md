@@ -158,7 +158,7 @@ and the INDEL types of *S1* and *S2* are the same. Minisv compares all types of
 SVs that can be associated with two ends. You can also specify the minimum read
 support (`-c`) and the minimum SV length (`-l`) on the command line.
 
-If more than two callsets are given on the command line, minisv will generate an
+If three or more callsets are given on the command line, minisv will generate an
 output like:
 ```txt
 SN  980     0.6091  0.8580  0.6135  0.9104  0.8754  C1
@@ -174,6 +174,20 @@ where the diagonal gives the count of SVs and the number at row *R* and column
 Generally, higher fraction on a row is correlated with higher sensitivity;
 higher fraction on a column is correlated with higher specificity for the
 caller on the column.
+
+If you have 3+ callsets, you may also use option `-M` for evaluation in the
+consensus mode. In this mode, an FP is a call in callset *C* that is not found
+in another *other* callsets. Conversely, an FN is a call that is supported by
+two or more *other* callsets but is not called in *C*. Here is sample output:
+```txt
+RN  845  98   0.1160  C1
+RP  980  49   0.0500  C1
+RN  994  918  0.9235  C2
+RP  110  18   0.1636  C2
+...
+```
+Here the false negative rate (RN) for *C1* is 11.6% and the false positive rate
+(RP) is 5.0% based on the definition above.
 
 Minisv seamlessly parses the VCF format and the minisv format. It has been
 tested with Severus, Sniffles2, cuteSV, SAVANA, SVision-Pro, nanomonsv, SvABA
