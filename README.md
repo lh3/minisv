@@ -57,7 +57,7 @@ calling modes in three steps:
 1. Extract SVs from read alignment with `extract`. This command processes one
    read at a time, extracts long INDELs or breakends and outputs in a BED-like
    minisv format. If you have tumor-normal pairs, remember to use `-n` to
-   specify samples such thatdd you can distinguish the samples in step 3.
+   specify samples such that you can distinguish the samples in step 3.
 
 2. Intersect candidate SVs extracted from multiple alignment files with `isec`.
    You can skip this step if you use one reference genome only, but you would
@@ -156,7 +156,7 @@ The command line outputs TP, FN and FP. Minisv considers two SVs, *S1* and
 *S2*, to be the same if both ends of *S1* are within 500 bp from ends of *S2*
 and the INDEL types of *S1* and *S2* are the same. Minisv compares all types of
 SVs that can be associated with two ends. You can also specify the minimum read
-support (`-c`) and the minimum SV length (`-l`)on the command line.
+support (`-c`) and the minimum SV length (`-l`) on the command line.
 
 If more than two callsets are given on the command line, minisv will generate an
 output like:
@@ -190,6 +190,12 @@ and GRIPSS.
 2. Minisv does not output genotypes. This makes it less useful for germline SV
    calling. On the HG002 benchmark data, minisv is close to but not as good as
    the best germline SV caller.
+
+3. For the best accuracy, minisv needs the alignment of all reads against
+   multiple reference genomes or pangenome graphs. This greatly increases the
+   running time. A better strategy is to only align reads with SVs to reduce
+   alignment time. It is possible to build a pipeline on top of minisv but this
+   has not been implemented.
 
 [mg-zenodo]: https://zenodo.org/records/6286521
 [vntr-wiki]: https://en.wikipedia.org/wiki/Variable_number_tandem_repeat
