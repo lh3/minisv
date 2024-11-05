@@ -976,7 +976,7 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
                                 if (s.ori == ">>" && s.svtype == "BND" && s.ctg == s.ctg2) {
 				    //patch Templated_ins >> in severus which can be cross chrom or within chrom
 		                    if ((m = /\bDETAILED_TYPE=([^\s;]+)/.exec(info)) != null) {
-				           if (m[1] == 'Templated_ins') s.svtype = "BND";
+				           if (m[1] == 'Templated_ins') s.svtype = "DUP";
 			            } else {
                                            s.svtype = "DEL";
 			            } 
