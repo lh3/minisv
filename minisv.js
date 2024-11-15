@@ -908,7 +908,7 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 			if (t[0] == t[3] && (t[2] == "><" || t[2] == "<>")) inv = true;
 			sv.push({ ctg:t[0], pos:t[1], ctg2:t[3], pos2:t[4], ori:t[2], svtype:svtype, svlen:svlen, inv:inv, count:cnt_tot, vaf:1 });
 		} else if (type == 1) { // VCF line
-                        // skip Too_low_VAF in nanomonsv 
+			// skip Too_low_VAF in nanomonsv
 			if (!ignore_flt && t[6] !== "PASS" && t[6] !== ".") continue; // ignore filtered calls
 			if (check_gt && t.length >= 9 && /^0[\/\|]0/.test(t[9])) continue; // not a variant
 			let rlen = t[3].length, en = t[1] + rlen - 1;
@@ -932,12 +932,11 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 					ignore_id[m[2]] = 1;
 				if (svtype == null) throw Error(`can't determine SVTYPE: ${t.join("\t")}`); // we don't infer SVTYPE from breakpoint
 				s.svtype = svtype;
-                                // patch nanomonsv insertion size
-                                if (svtype == "INS") {
-		                    if ((m = /\bSVINSLEN=([^\s;]+)/.exec(info)) != null) {
-		                	svlen = parseFloat(m[1]);
-                                    }
-                                }
+				// patch nanomonsv insertion size
+				if (svtype == "INS") {
+					if ((m = /\bSVINSLEN=([^\s;]+)/.exec(info)) != null)
+						svlen = parseFloat(m[1]);
+				}
 				if (svtype !== "BND" && Math.abs(svlen) < min_len) continue; // too short
 				if (svtype === "DEL" && svlen > 0) svlen = -svlen; // correct SVLEN as some VCF encodes this differently
 				s.svlen = svlen;
@@ -955,34 +954,33 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 
 				if (s.ctg == s.ctg2 && (s.ori == "><" || s.ori == "<>")) s.inv = true;
                                 
-                                //patch inv svtype for nanomonsv and savana
-                                if (s.inv && s.svtype == "BND") {
-                                     s.svtype = "INV";
-                                     svlen = Math.abs(s.pos2 - s.pos);
-                                     s.svlen = svlen;
-                                }
-                                // patch dup svtype for nanomonsv and severus
-                                if (s.svtype == "DUP" && s.ori == ">>") {
-                                    s.ori = "<<";
-                                }
-                                // severus inv do not have orientation in alt allele
+				// patch inv svtype for nanomonsv and savana
+				if (s.inv && s.svtype == "BND") {
+					s.svtype = "INV";
+					svlen = Math.abs(s.pos2 - s.pos);
+					s.svlen = svlen;
+				}
+				// patch dup svtype for nanomonsv and severus
+				if (s.svtype == "DUP" && s.ori == ">>") {
+					s.ori = "<<";
+				}
+				// severus inv do not have orientation in alt allele
 				if (s.ctg == s.ctg2 && s.ori != "><" && s.ori != "<>" && s.svtype == "INV") {
-                                    s.ori = "><"; // or <>
-                                    s.inv = true;
-                                }
+					s.ori = "><"; // or <>
+					s.inv = true;
+				}
 				
-                                //this patch of svtype for savana which has only BND/INS
-				//may ignore Templated_ins in savana
-                                if (s.ori == ">>" && s.svtype == "BND" && s.ctg == s.ctg2) {
-				    //patch Templated_ins >> in severus which can be cross chrom or within chrom
-		                    if ((m = /\bDETAILED_TYPE=([^\s;]+)/.exec(info)) != null) {
-				           if (m[1] == 'Templated_ins') s.svtype = "BND";
-			            } else {
-                                           s.svtype = "DEL";
-			            } 
-                                } else if (s.ori == "<<" && s.svtype == "BND" && s.ctg == s.ctg2) {
-                                     s.svtype = "DUP";
-                                }
+				// this patch of svtype for savana which has only BND/INS may ignore Templated_ins in savana
+				if (s.ori == ">>" && s.svtype == "BND" && s.ctg == s.ctg2) {
+					//patch Templated_ins >> in severus which can be cross chrom or within chrom
+					if ((m = /\bDETAILED_TYPE=([^\s;]+)/.exec(info)) != null) {
+						if (m[1] == 'Templated_ins') s.svtype = "BND";
+					} else {
+						s.svtype = "DEL";
+					}
+				} else if (s.ori == "<<" && s.svtype == "BND" && s.ctg == s.ctg2) {
+					s.svtype = "DUP";
+				}
 				if (s.svtype === "DEL" && s.svlen > 0) {
 					svlen = -svlen; // correct SVLEN as some VCF encodes this differently
 					s.svlen = svlen; // correct SVLEN as some VCF encodes this differently
@@ -1138,9 +1136,6 @@ function gc_cmp_sv(opt, base, test, label) {
 	let tot = 0, error = 0;
 	for (let j = 0; j < test.length; ++j) {
 		const t = test[j];
-                //if (opt.print_all)  {
-		//    print(label, t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen, t.svid);
-                //}
 		if (t.svtype !== "BND" && Math.abs(t.svlen) < opt.min_len) continue; // not long enough for non-BND type; note that t.ctg === t.ctg2 MUST stand due to assertion in parsing
 		if (t.svtype === "BND" && t.ctg === t.ctg2 && Math.abs(t.svlen) < opt.min_len) continue; // not long enough; in principle, this can be merged to the line above
 		if (t.count > 0 && t.count < opt.min_count) continue; // filter by count
@@ -1157,9 +1152,8 @@ function gc_cmp_sv(opt, base, test, label) {
 			if (opt.print_err)
 			    print(label, t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svid, t.svlen, n);
 		}
-                if (opt.print_all)  {
-		    print(t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen, t.svid, n);
-                }
+		if (opt.print_all)
+			print(t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen, t.svid, n);
 	}
 	return [tot, error];
 }
@@ -1230,7 +1224,7 @@ function gc_cmd_eval(args) {
 
 	if (args.length === 2) { // two-sample mode
 		const base = gc_parse_sv(args[0], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
-	        const test = gc_parse_sv(args[1], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
+		const test = gc_parse_sv(args[1], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
 
 		if (opt.search_best) {
 			let best_c = 1, min_err = 1e9, best_tot_fn = -1, best_tot_fp = -1, best_fn = -1, best_fp = -1;
@@ -1307,8 +1301,7 @@ function gc_cmd_annot(args) {
 		else if (o.opt === "-e") opt.print_err = true;
 	}
 	if (args.length < 2) {
-		print("Usgae: minisv.js annot [options] <test.vcf> <annot1.vcf> <annot2.vcf");
-		print("Use consensus SV from annot1/2/.. to annotate test.vcf");
+		print("Usgae: minisv.js annot [options] <test.vcf> <annot1.vcf> <annot2.vcf>");
 		print("Options:");
 		print(`  -b FILE     confident regions in BED []`);
 		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
@@ -1566,6 +1559,7 @@ function main(args)
 		print("  genvcf       convert to VCF");
 		print("  view         print in the gafcall format");
 		print("  eval         evaluate SV calls");
+		print("  anno         annotate one SV VCF with other VCFs");
 		print("  snfpair      get tumor-specific SVs from Sniffles2 paired output");
 		print("  version      print version number");
 		exit(1);
@@ -1577,7 +1571,7 @@ function main(args)
 	else if (cmd === "merge" || cmd === "mergesv") gc_cmd_merge(args);
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);
-	else if (cmd === "annot") gc_cmd_annot(args);
+	else if (cmd === "annot" || cmd === "anno") gc_cmd_annot(args);
 	else if (cmd === "view" || cmd === "format") gc_cmd_view(args);
 	else if (cmd === "isec") gc_cmd_isec(args);
 	else if (cmd === "genvcf") gc_cmd_genvcf(args);
