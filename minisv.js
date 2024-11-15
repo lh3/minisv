@@ -848,6 +848,7 @@ function gc_get_count_vcf(t) {
 	while ((m = re_info.exec(t[7])) != null) {
 		if (m[1] == "SUPPORT") return parseInt(m[2]); // Sniffles2
 		else if (m[1] == "TUMOUR_SUPPORT") return parseInt(m[2]); // SAVANA
+		else if (m[1] == "TUMOUR_READ_SUPPORT") return parseInt(m[2]); // SAVANA1.2
 	}
 	if (t.length >= 10 && /\bDV|VR\b/.test(t[8])) { // parse DV (Severus & Sniffles2) or VR (nanomonsv) format
 		const fmt = t[8].split(":");
@@ -868,7 +869,8 @@ function gc_get_count_vcf(t) {
 function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 	let sv = [], ignore_id = {};
 	ignore_flt = typeof ignore_flt !== "undefined"? ignore_flt : true;
-	check_gt = typeof check_gt !== "undefined"? check_gt : false;
+        check_gt = typeof check_gt !== "undefined"? check_gt : false;
+
 	for (const line of k8_readline(fn)) {
 		if (line[0] === "#") continue;
 		let m, t = line.split("\t");
@@ -906,10 +908,11 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 			if (t[0] == t[3] && (t[2] == "><" || t[2] == "<>")) inv = true;
 			sv.push({ ctg:t[0], pos:t[1], ctg2:t[3], pos2:t[4], ori:t[2], svtype:svtype, svlen:svlen, inv:inv, count:cnt_tot, vaf:1 });
 		} else if (type == 1) { // VCF line
+                        // skip Too_low_VAF in nanomonsv 
 			if (!ignore_flt && t[6] !== "PASS" && t[6] !== ".") continue; // ignore filtered calls
 			if (check_gt && t.length >= 9 && /^0[\/\|]0/.test(t[9])) continue; // not a variant
 			let rlen = t[3].length, en = t[1] + rlen - 1;
-			let s = { ctg:t[0], pos:t[1]-1, ctg2:t[0], pos2:en, ori:">>", inv:inv, count:cnt_tot, vaf:1 };
+			let s = { ctg:t[0], pos:t[1]-1, ctg2:t[0], pos2:en, ori:">>", inv:inv, count:cnt_tot, vaf:1, svid: t[2] };
 			if ((m = /\bVAF=([^\s;]+)/.exec(info)) != null)
 				s.vaf = parseFloat(m[1]);
 			if (/^[A-Z,\*]+$/.test(t[4]) && t[4] != "SV" && t[4] != "CSV") { // assume full allele sequence; override SVTYPE/SVLEN even if present
@@ -929,6 +932,12 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 					ignore_id[m[2]] = 1;
 				if (svtype == null) throw Error(`can't determine SVTYPE: ${t.join("\t")}`); // we don't infer SVTYPE from breakpoint
 				s.svtype = svtype;
+                                // patch nanomonsv insertion size
+                                if (svtype == "INS") {
+		                    if ((m = /\bSVINSLEN=([^\s;]+)/.exec(info)) != null) {
+		                	svlen = parseFloat(m[1]);
+                                    }
+                                }
 				if (svtype !== "BND" && Math.abs(svlen) < min_len) continue; // too short
 				if (svtype === "DEL" && svlen > 0) svlen = -svlen; // correct SVLEN as some VCF encodes this differently
 				s.svlen = svlen;
@@ -943,11 +952,46 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
 				else if ((m = /^\]([^\s:]+):(\d+)\][A-Z]+$/.exec(t[4])) != null) s.ctg2 = m[1], s.pos2 = parseInt(m[2]), s.ori = "<<";
 				else if ((m = /^\[([^\s:]+):(\d+)\[[A-Z]+$/.exec(t[4])) != null) s.ctg2 = m[1], s.pos2 = parseInt(m[2]), s.ori = "<>";
 				else if ((m = /^[A-Z]+\]([^\s:]+):(\d+)\]$/.exec(t[4])) != null) s.ctg2 = m[1], s.pos2 = parseInt(m[2]), s.ori = "><";
+
 				if (s.ctg == s.ctg2 && (s.ori == "><" || s.ori == "<>")) s.inv = true;
-				if (svtype !== "BND" && s.ctg !== s.ctg2) throw Error("different contigs for non-BND type");
-				if (svtype === "BND" && s.ctg === s.ctg2) {
-					if (svlen == 0 && Math.abs(s.pos2 - s.pos) < min_len) continue;
-					if (svlen != 0 && Math.abs(svlen) < min_len) continue;
+                                
+                                //patch inv svtype for nanomonsv and savana
+                                if (s.inv && s.svtype == "BND") {
+                                     s.svtype = "INV";
+                                     svlen = Math.abs(s.pos2 - s.pos);
+                                     s.svlen = svlen;
+                                }
+                                // patch dup svtype for nanomonsv and severus
+                                if (s.svtype == "DUP" && s.ori == ">>") {
+                                    s.ori = "<<";
+                                }
+                                // severus inv do not have orientation in alt allele
+				if (s.ctg == s.ctg2 && s.ori != "><" && s.ori != "<>" && s.svtype == "INV") {
+                                    s.ori = "><"; // or <>
+                                    s.inv = true;
+                                }
+				
+                                //this patch of svtype for savana which has only BND/INS
+				//may ignore Templated_ins in savana
+                                if (s.ori == ">>" && s.svtype == "BND" && s.ctg == s.ctg2) {
+				    //patch Templated_ins >> in severus which can be cross chrom or within chrom
+		                    if ((m = /\bDETAILED_TYPE=([^\s;]+)/.exec(info)) != null) {
+				           if (m[1] == 'Templated_ins') s.svtype = "DUP";
+			            } else {
+                                           s.svtype = "DEL";
+			            } 
+                                } else if (s.ori == "<<" && s.svtype == "BND" && s.ctg == s.ctg2) {
+                                     s.svtype = "DUP";
+                                }
+				if (s.svtype === "DEL" && s.svlen > 0) {
+					svlen = -svlen; // correct SVLEN as some VCF encodes this differently
+					s.svlen = svlen; // correct SVLEN as some VCF encodes this differently
+				}
+
+				if (s.svtype !== "BND" && s.ctg !== s.ctg2) throw Error("different contigs for non-BND type");
+				if (s.svtype === "BND" && s.ctg === s.ctg2) {
+					if (s.svlen == 0 && Math.abs(s.pos2 - s.pos) < min_len) continue;
+					if (s.svlen != 0 && Math.abs(s.svlen) < min_len) continue;
 				}
 				if (s.ctg === s.ctg2 && s.pos > s.pos2) {
 					let tmp = s.pos;
@@ -1093,6 +1137,9 @@ function gc_cmp_sv(opt, base, test, label) {
 	let tot = 0, error = 0;
 	for (let j = 0; j < test.length; ++j) {
 		const t = test[j];
+                //if (opt.print_all)  {
+		//    print(label, t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen, t.svid);
+                //}
 		if (t.svtype !== "BND" && Math.abs(t.svlen) < opt.min_len) continue; // not long enough for non-BND type; note that t.ctg === t.ctg2 MUST stand due to assertion in parsing
 		if (t.svtype === "BND" && t.ctg === t.ctg2 && Math.abs(t.svlen) < opt.min_len) continue; // not long enough; in principle, this can be merged to the line above
 		if (t.count > 0 && t.count < opt.min_count) continue; // filter by count
@@ -1107,8 +1154,11 @@ function gc_cmp_sv(opt, base, test, label) {
 		if (n == 0) {
 			++error;
 			if (opt.print_err)
-				print(label, t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen);
+			    print(label, t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svid, t.svlen, n);
 		}
+                if (opt.print_all)  {
+		    print(t.ctg, t.pos, t.ori, t.ctg2, t.pos2, t.svtype, t.svlen, t.svid, n);
+                }
 	}
 	return [tot, error];
 }
@@ -1140,8 +1190,8 @@ function gc_eval_merge_sv(win_size, min_len_ratio, all) {
 
 function gc_cmd_eval(args) {
 	let opt = { min_len:100, read_len_ratio:0.8, win_size:500, min_len_ratio:0.6, min_vaf:0, min_count:0, bed:null,
-				dbg:false, print_err:false, ignore_flt:false, check_gt:false, search_best:false, merge:false };
-	for (const o of getopt(args, "dr:l:w:em:v:b:c:FGCM")) {
+				dbg:false, print_err:false, print_all:false, ignore_flt:false, check_gt:false, search_best:false, merge:false };
+	for (const o of getopt(args, "dr:l:w:eam:v:b:c:FGCM")) {
 		if (o.opt === "-d") opt.dbg = true;
 		else if (o.opt === "-b") opt.bed = gc_read_bed(o.arg);
 		else if (o.opt === "-l") opt.min_len = parseNum(o.arg);
@@ -1153,6 +1203,7 @@ function gc_cmd_eval(args) {
 		else if (o.opt === "-F") opt.ignore_flt = true;
 		else if (o.opt === "-G") opt.check_gt = true;
 		else if (o.opt === "-e") opt.print_err = true;
+		else if (o.opt === "-a") opt.print_all = true;
 		else if (o.opt === "-C") opt.search_best = true;
 		else if (o.opt === "-M") opt.merge = true;
 	}
@@ -1171,13 +1222,15 @@ function gc_cmd_eval(args) {
 		print(`  -G          check GT in VCF`);
 		print(`  -C          search for the best count threshold`);
 		print(`  -e          print errors`);
+		print(`  -a          print all`);
 		return;
 	}
 	const min_read_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
 
 	if (args.length === 2) { // two-sample mode
 		const base = gc_parse_sv(args[0], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
-		const test = gc_parse_sv(args[1], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
+	        const test = gc_parse_sv(args[1], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
+
 		if (opt.search_best) {
 			let best_c = 1, min_err = 1e9, best_tot_fn = -1, best_tot_fp = -1, best_fn = -1, best_fp = -1;
 			for (let c = 1; c < 10000; ++c) {
@@ -1232,6 +1285,59 @@ function gc_cmd_eval(args) {
 				print(a.join("\t"), args[i]);
 			}
 		}
+	}
+}
+
+
+function gc_cmd_annot(args) {
+	let opt = { min_len:100, read_len_ratio:0.8, win_size:500, min_len_ratio:0.6, min_vaf:0, min_count:0, bed:null,
+		    dbg:false, print_err:false, all:false,
+                    ignore_flt:false, check_gt:false };
+	for (const o of getopt(args, "dab:e:l:c:m:r:w:v:")) {
+		if (o.opt === "-d") opt.dbg = true;
+		else if (o.opt === "-a") opt.print_all = true;
+		else if (o.opt === "-b") opt.bed = gc_read_bed(o.arg);
+		else if (o.opt === "-l") opt.min_len = parseNum(o.arg);
+		else if (o.opt === "-c") opt.min_count = parseInt(o.arg);
+		else if (o.opt === "-m") opt.min_len_ratio = parseFloat(o.arg);
+		else if (o.opt === "-r") opt.read_len_ratio = parseFloat(o.arg);
+		else if (o.opt === "-w") opt.win_size = parseNum(o.arg);
+		else if (o.opt === "-v") opt.min_vaf = parseFloat(o.arg);
+		else if (o.opt === "-e") opt.print_err = true;
+	}
+	if (args.length < 2) {
+		print("Usgae: minisv.js annot [options] <test.vcf> <annot1.vcf> <annot2.vcf");
+		print("Use consensus SV from annot1/2/.. to annotate test.vcf");
+		print("Options:");
+		print(`  -b FILE     confident regions in BED []`);
+		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
+		print(`  -c INT      min supporting read count [${opt.min_count}]`);
+		print(`  -m FLOAT    two SVs regarded the same if length ratio above [${opt.min_len_ratio}]`);
+		print(`  -r FLOAT    read SVs longer than {-l}*FLOAT [${opt.read_len_ratio}]`);
+		print(`  -w NUM      fuzzy window size [${opt.win_size}]`);
+		print(`  -v FLOAT    ignore VAF below FLOAT (requiring VAF in VCF) [${opt.min_vaf}]`);
+		print(`  -e          print errors`);
+		print(`  -p          print all svs`);
+		return;
+	}
+	const min_read_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
+
+	let vcf = [];
+	for (let i = 0; i < args.length; ++i) {
+		vcf[i] = gc_parse_sv(args[i], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
+        }
+
+	for (let i = 0; i < args.length; ++i) {
+		let other = [];
+		for (let j = 0; j < args.length; ++j)
+			if (i != j) other.push(vcf[j]);
+		let merge = gc_eval_merge_sv(opt.win_size, opt.min_len_ratio, other);
+		let merge2 = [];
+		for (let k = 0; k < merge.length; ++k)
+			if (merge[k].merge >= 2)
+				merge2.push(merge[k]);
+		const [tot_fp, fp] = gc_cmp_sv(opt, merge2, vcf[i]);
+                break;
 	}
 }
 
@@ -1470,6 +1576,7 @@ function main(args)
 	else if (cmd === "merge" || cmd === "mergesv") gc_cmd_merge(args);
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);
+	else if (cmd === "annot") gc_cmd_annot(args);
 	else if (cmd === "view" || cmd === "format") gc_cmd_view(args);
 	else if (cmd === "isec") gc_cmd_isec(args);
 	else if (cmd === "genvcf") gc_cmd_genvcf(args);
