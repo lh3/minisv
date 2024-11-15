@@ -976,7 +976,7 @@ function gc_parse_sv(fn, min_len, min_cnt, ignore_flt, check_gt) {
                                 if (s.ori == ">>" && s.svtype == "BND" && s.ctg == s.ctg2) {
 				    //patch Templated_ins >> in severus which can be cross chrom or within chrom
 		                    if ((m = /\bDETAILED_TYPE=([^\s;]+)/.exec(info)) != null) {
-				           if (m[1] == 'Templated_ins') s.svtype = "DUP";
+				           if (m[1] == 'Templated_ins') s.svtype = "BND";
 			            } else {
                                            s.svtype = "DEL";
 			            } 
@@ -1089,7 +1089,8 @@ function gc_cmp_same_sv1(win_size, min_len_ratio, b, t) {
 			return false;
 	}
 	// check length
-	const len_check = (Math.abs(b.svlen) >= Math.abs(t.svlen) * min_len_ratio && Math.abs(t.svlen) >= Math.abs(b.svlen) * min_len_ratio);
+	// add absolute diff length check for eval
+	const len_check = (Math.abs(Math.abs(b.svlen) - Math.abs(t.svlen)) <= 1000) || (Math.abs(b.svlen) >= Math.abs(t.svlen) * min_len_ratio && Math.abs(t.svlen) >= Math.abs(b.svlen) * min_len_ratio);
 	if (b.svtype !== "BND" && t.svtype !== "BND" && !len_check) return false;
 	// check the coordinates of end points
 	let match1 = 0, match2 = 0;
