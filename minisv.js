@@ -2,7 +2,7 @@
 
 "use strict";
 
-const gc_version = "r19";
+const gc_version = "r29";
 
 /**************
  * From k8.js *
@@ -1158,7 +1158,7 @@ function gc_cmp_sv(opt, base, test, label) {
 	return [tot, error];
 }
 
-function gc_eval_merge_sv(all, win_size, min_len_ratio) {
+function gc_eval_merge_sv(all, win_size, min_len_ratio) { // merge SVs based on evaluation criteria (more relaxed than merging minisv SVs)
 	let vcf = [];
 	for (let i = 0; i < all.length; ++i)
 		for (let j = 0; j < all[i].length; ++j)
@@ -1333,26 +1333,118 @@ function gc_cmd_annot(args) {
 	}
 }
 
+/******************************
+ * Merge multiple SV callsets *
+ ******************************/
+
+function gc_sv2array(s) {
+	let attr = [`SVTYPE=${s.svtype}`, `SVLEN=${s.svlen}`, `count=${s.count}`];
+	if (s.group_id != null) attr.push(`group_id=${s.group_id}`);
+	if (s.file_id != null) attr.push(`file_id=${s.file_id}`);
+	return [s.ctg, s.pos, s.ori, s.ctg2, s.pos2, attr.join(";")];
+}
+
 function gc_cmd_union(args) {
-	let opt = { min_len:100, read_len_ratio:0.8, min_count:2 };
-	for (const o of getopt(args, "l:c:r:")) {
-		if (o.opt == "-l") opt.min_len = parseNum(o.arg);
-		else if (o.opt == '-c') opt.min_count = parseInt(o.arg);
+	let opt = { min_len:100, read_len_ratio:0.8, read_min_count:2, group_min_count:5, win_size:500, min_len_ratio:0.6, bed:null, print_sv:false };
+	for (const o of getopt(args, "b:l:c:g:r:w:m:p")) {
+		if (o.opt === "-b") opt.bed = gc_read_bed(o.arg);
+		else if (o.opt == "-l") opt.min_len = parseNum(o.arg);
+		else if (o.opt == '-c') opt.read_min_count = parseInt(o.arg);
+		else if (o.opt == '-g') opt.group_min_count = parseInt(o.arg);
 		else if (o.opt == '-r') opt.read_len_ratio = parseFloat(o.arg);
+		else if (o.opt == '-w') opt.win_size = parseNum(o.arg);
+		else if (o.opt == '-m') opt.min_len_ratio = parseFloat(o.arg);
+		else if (o.opt == '-p') opt.print_sv = true;
 	}
-	const min_read_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
+	const read_min_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
 	if (args.length < 2) {
 		print("Usage: minisv.js union [options] <in1.vcf> [in2.vcf [...]]");
 		print("Options:");
+		print(`  -b FILE     confident regions in BED []`);
+		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
+		print(`  -c INT      min supporting read count [${opt.read_min_count}]`);
+		print(`  -g INT      min supporting read count in a group [${opt.group_min_cnt}]`);
+		print(`  -w NUM      fuzzy window size [${opt.win_size}]`);
 		print(`  -r FLOAT    read SVs longer than {-l}*FLOAT [${opt.read_len_ratio}]`);
+		print(`  -m FLOAT    two SVs regarded the same if length ratio above [${opt.min_len_ratio}]`);
+		print(`  -p          print SVs and their grouping`);
 		return;
 	}
 
-	let vcf = [];
-	for (let i = 0; i < args.length; ++i) {
-		vcf[i] = gc_parse_sv(args[i], min_read_len, opt.min_count, false, false);
-		for (let j = 0; j < vcf[i].length; ++j)
-			v[j].file = args[i];
+	let sv = [];
+	for (let i = 0; i < args.length; ++i) { // read all variants and put them into one long array
+		let v = gc_parse_sv(args[i], read_min_len, opt.read_min_count, false, false);
+		for (let j = 0; j < v.length; ++j) {
+			let t = v[j];
+			t.file_id = i, t.in_bed = true;
+			if (opt.bed != null) {
+				if (opt.bed[t.ctg] == null || opt.bed[t.ctg2] == null) t.in_bed = false;
+				else if (iit_overlap(opt.bed[t.ctg],  t.pos,  t.pos  + 1).length === 0) t.in_bed = false;
+				else if (iit_overlap(opt.bed[t.ctg2], t.pos2, t.pos2 + 1).length === 0) t.in_bed = false;
+			}
+			sv.push(t);
+		}
+	}
+	// the following is adapted from gc_eval_merge_sv()
+	sv.sort(function(a, b) { return a.ctg < b.ctg? -1 : a.ctg > b.ctg? 1 : a.pos - b.pos }); // sort by coordinate
+	let group = [], n_ambi1 = 0, n_ambi2 = 0;
+	for (let i = 0; i < sv.length; ++i) {
+		let merge_to = [], is_ambi1 = false;
+		for (let j = group.length - 1; j >= 0; --j) {
+			const g = group[j];
+			if (g[0].ctg != sv[i].ctg) break;
+			if (sv[i].pos - g[0].pos > opt.win_size) break;
+			let n_same = 0;
+			for (let k = 0; k < g.length; ++k)
+				if (gc_cmp_same_sv1(g[k], sv[i], opt.win_size, opt.min_len_ratio))
+					++n_same;
+			if (n_same > 0) {
+				merge_to.push(j);
+				if (n_same != g.length)
+					is_ambi1 = true;
+			}
+		}
+		if (is_ambi1) ++n_ambi1;
+		if (merge_to.length == 0) {
+			group.push([sv[i]]);
+		} else {
+			group[merge_to[0]].push(sv[i]);
+			if (merge_to.length > 1)
+				++n_ambi2;
+		}
+	}
+	if (n_ambi1 > 0) warn(`WARNING: ${n_ambi1} type-1 ambiguous merges`);
+	if (n_ambi2 > 0) warn(`WARNING: ${n_ambi2} type-2 ambiguous merges`);
+	// summarize the result
+	let cnt = [];
+	for (let i = 0; i < 1<<args.length; ++i)
+		cnt[i] = 0;
+	for (let j = 0; j < group.length; ++j) {
+		const g = group[j];
+		let in_bed = false, max_cnt = 0, max_len = 0, has_bnd = false, x = 0;
+		for (let k = 0; k < g.length; ++k) {
+			if (g[k].in_bed) in_bed = true;
+			max_cnt = max_cnt > g[k].count? max_cnt : g[k].count;
+			max_len = max_len > Math.abs(g[k].svlen)? max_len : Math.abs(g[k].svlen);
+			if (g[k].svtype == "BND") has_bnd = true;
+			x |= 1<<g[k].file_id;
+			g[k].group_id = j;
+		}
+		if (max_cnt < opt.group_min_count) continue;
+		if (has_bnd == false && max_len < opt.min_len) continue;
+		if (in_bed == false) continue;
+		++cnt[x];
+		if (opt.print_sv)
+			for (let k = 0; k < g.length; ++k)
+				print(gc_sv2array(g[k]).join("\t"));
+	}
+	if (!opt.print_sv) {
+		for (let x = 1; x < cnt.length; ++x) {
+			let label = [];
+			for (let i = 0; i < args.length; ++i)
+				label[i] = x>>i&1;
+			print(label.join(""), cnt[x]);
+		}
 	}
 }
 
