@@ -1080,7 +1080,7 @@ function gc_cmd_view(args) {
  * Evaluation *
  **************/
 
-function gc_cmp_same_sv1(win_size, min_len_ratio, b, t) {
+function gc_cmp_same_sv1(b, t, win_size, min_len_ratio) {
 	// check type
 	if (b.svtype != t.svtype) { // type mismatch
 		if (!(b.svtype === "DUP" && t.svtype === "INS") && !(b.svtype === "INS" && t.svtype === "DUP") && b.svtype !== "BND" && t.svtype !== "BND") // special case for INS vs DUP
@@ -1128,7 +1128,7 @@ function gc_cmp_sv(opt, base, test, label) {
 		const a = iit_overlap(h[ctg], st, en);
 		let n = 0;
 		for (let i = 0; i < a.length; ++i)
-			if (gc_cmp_same_sv1(opt.win_size, opt.min_len_ratio, a[i].data, t))
+			if (gc_cmp_same_sv1(a[i].data, t, opt.win_size, opt.min_len_ratio))
 				++n;
 		return n;
 	}
@@ -1158,7 +1158,7 @@ function gc_cmp_sv(opt, base, test, label) {
 	return [tot, error];
 }
 
-function gc_eval_merge_sv(win_size, min_len_ratio, all) {
+function gc_eval_merge_sv(all, win_size, min_len_ratio) {
 	let vcf = [];
 	for (let i = 0; i < all.length; ++i)
 		for (let j = 0; j < all[i].length; ++j)
@@ -1169,7 +1169,7 @@ function gc_eval_merge_sv(win_size, min_len_ratio, all) {
 		let merge_to = -1;
 		vcf[i].merge = 0;
 		for (let j = out.length - 1; j >= 0 && out[j].ctg == vcf[i].ctg && vcf[i].pos - out[j].pos <= win_size; --j) {
-			if (gc_cmp_same_sv1(win_size, min_len_ratio, out[j], vcf[i])) {
+			if (gc_cmp_same_sv1(out[j], vcf[i], win_size, min_len_ratio)) {
 				merge_to = j;
 				break;
 			}
@@ -1259,7 +1259,7 @@ function gc_cmd_eval(args) {
 				let other = [];
 				for (let j = 0; j < args.length; ++j)
 					if (i != j) other.push(vcf[j]);
-				let merge = gc_eval_merge_sv(opt.win_size, opt.min_len_ratio, other);
+				let merge = gc_eval_merge_sv(other, opt.win_size, opt.min_len_ratio);
 				const [tot_fp, fp] = gc_cmp_sv(opt, merge, vcf[i]);
 				let merge2 = [];
 				for (let k = 0; k < merge.length; ++k)
@@ -1286,8 +1286,7 @@ function gc_cmd_eval(args) {
 
 function gc_cmd_annot(args) {
 	let opt = { min_len:100, read_len_ratio:0.8, win_size:500, min_len_ratio:0.6, min_vaf:0, min_count:0, bed:null,
-		    dbg:false, print_err:false, all:false,
-                    ignore_flt:false, check_gt:false };
+				dbg:false, print_err:false, all:false, ignore_flt:false, check_gt:false };
 	for (const o of getopt(args, "dab:e:l:c:m:r:w:v:")) {
 		if (o.opt === "-d") opt.dbg = true;
 		else if (o.opt === "-a") opt.print_all = true;
@@ -1301,7 +1300,7 @@ function gc_cmd_annot(args) {
 		else if (o.opt === "-e") opt.print_err = true;
 	}
 	if (args.length < 2) {
-		print("Usgae: minisv.js annot [options] <test.vcf> <annot1.vcf> <annot2.vcf>");
+		print("Usgae: minisv.js annot [options] <test.vcf> <annot1.vcf> [annot2.vcf [...]]");
 		print("Options:");
 		print(`  -b FILE     confident regions in BED []`);
 		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
@@ -1317,21 +1316,43 @@ function gc_cmd_annot(args) {
 	const min_read_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
 
 	let vcf = [];
-	for (let i = 0; i < args.length; ++i) {
+	for (let i = 0; i < args.length; ++i)
 		vcf[i] = gc_parse_sv(args[i], min_read_len, opt.min_count, opt.ignore_flt, opt.check_gt);
-        }
 
 	for (let i = 0; i < args.length; ++i) {
 		let other = [];
 		for (let j = 0; j < args.length; ++j)
 			if (i != j) other.push(vcf[j]);
-		let merge = gc_eval_merge_sv(opt.win_size, opt.min_len_ratio, other);
+		let merge = gc_eval_merge_sv(other, opt.win_size, opt.min_len_ratio);
 		let merge2 = [];
 		for (let k = 0; k < merge.length; ++k)
 			if (merge[k].merge >= 2)
 				merge2.push(merge[k]);
 		const [tot_fp, fp] = gc_cmp_sv(opt, merge2, vcf[i]);
-                break;
+		break;
+	}
+}
+
+function gc_cmd_union(args) {
+	let opt = { min_len:100, read_len_ratio:0.8, min_count:2 };
+	for (const o of getopt(args, "l:c:r:")) {
+		if (o.opt == "-l") opt.min_len = parseNum(o.arg);
+		else if (o.opt == '-c') opt.min_count = parseInt(o.arg);
+		else if (o.opt == '-r') opt.read_len_ratio = parseFloat(o.arg);
+	}
+	const min_read_len = Math.floor(opt.min_len * opt.read_len_ratio + .499);
+	if (args.length < 2) {
+		print("Usage: minisv.js union [options] <in1.vcf> [in2.vcf [...]]");
+		print("Options:");
+		print(`  -r FLOAT    read SVs longer than {-l}*FLOAT [${opt.read_len_ratio}]`);
+		return;
+	}
+
+	let vcf = [];
+	for (let i = 0; i < args.length; ++i) {
+		vcf[i] = gc_parse_sv(args[i], min_read_len, opt.min_count, false, false);
+		for (let j = 0; j < vcf[i].length; ++j)
+			v[j].file = args[i];
 	}
 }
 
@@ -1560,6 +1581,7 @@ function main(args)
 		print("  view         print in the gafcall format");
 		print("  eval         evaluate SV calls");
 		print("  anno         annotate one SV VCF with other VCFs");
+		print("  union        infer the union of multiple callsets");
 		print("  snfpair      get tumor-specific SVs from Sniffles2 paired output");
 		print("  version      print version number");
 		exit(1);
@@ -1572,6 +1594,7 @@ function main(args)
 	else if (cmd === "mergeflt") gc_cmd_mergeflt(args);
 	else if (cmd === "eval") gc_cmd_eval(args);
 	else if (cmd === "annot" || cmd === "anno") gc_cmd_annot(args);
+	else if (cmd === "union") gc_cmd_union(args);
 	else if (cmd === "view" || cmd === "format") gc_cmd_view(args);
 	else if (cmd === "isec") gc_cmd_isec(args);
 	else if (cmd === "genvcf") gc_cmd_genvcf(args);
