@@ -1363,7 +1363,7 @@ function gc_cmd_union(args) {
 		print(`  -b FILE     confident regions in BED []`);
 		print(`  -l NUM      min SVLEN [${opt.min_len}]`);
 		print(`  -c INT      min supporting read count [${opt.read_min_count}]`);
-		print(`  -g INT      min supporting read count in a group [${opt.group_min_cnt}]`);
+		print(`  -g INT      min supporting read count in a group [${opt.group_min_count}]`);
 		print(`  -w NUM      fuzzy window size [${opt.win_size}]`);
 		print(`  -r FLOAT    read SVs longer than {-l}*FLOAT [${opt.read_len_ratio}]`);
 		print(`  -m FLOAT    two SVs regarded the same if length ratio above [${opt.min_len_ratio}]`);

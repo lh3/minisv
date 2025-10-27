@@ -41,11 +41,10 @@ simple strategy reduces alignment errors and filters out germline SVs in the
 sample (when used with the assembly of input reads) or in the population (when
 used with pangenomes).
 
-Given PacBio HiFi reads at high coverage, minisv
-achieves higher specificity for mosaic SV calling, has comparable accuracy to
-tumor-normal paired SV callers, and is the only tool accurate enough for
-calling large chromosomal alterations (CAs) from a single tumor sample without
-matched normal.
+A Python reimplementation with additional functionality (e.g. filtering somatic
+SVs by other callers) can be found [in this repo][msv-py].
+
+[msv-py]: https://github.com/qinqian/minisv.py
 
 ## <a name="design"></a>Workflow
 
